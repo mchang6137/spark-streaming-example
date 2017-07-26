@@ -29,13 +29,10 @@ import java.util.HashMap
 import scala.io.Source
 import scala.util.Random
 
-import net.minidev.json.JSONObject
-import net.minidev.json.parser.JSONParser
-
 /**
  *
  */
-object KafkaEventPublisher{
+object KafkaEventPublisher {
 
   val NUM_PAGE_IDS = 100
   val NUM_USER_IDS = 100
@@ -48,20 +45,22 @@ object KafkaEventPublisher{
     campaignIds: Array[String],
     eventTypes: Array[String],
     adTypes: Array[String],
-    adIds: Array[String])
+    adIds: Array[String]
+  )
 
   def generateJson(
-      ids: BenchmarkId,
-      rnd: java.util.Random,
-      sb: java.lang.StringBuilder,
-      idx: Int,
-      useCurrentTime: Boolean): (String, Long) = {
-      
-    val userIds = ids.value.userIds
-    val pageIds = ids.value.pageIds
-    val adTypes = ids.value.adTypes
-    val eventTypes = ids.value.eventTypes
-    val adIds = ids.value.adIds
+    ids: BenchmarkIds,
+    rnd: java.util.Random,
+    sb: java.lang.StringBuilder,
+    idx: Int,
+    useCurrentTime: Boolean
+  ): (String, Long) = {
+
+    val userIds = ids.userIds
+    val pageIds = ids.pageIds
+    val adTypes = ids.adTypes
+    val eventTypes = ids.eventTypes
+    val adIds = ids.adIds
 
     val adId = adIds(idx % adIds.length)
 
@@ -79,14 +78,8 @@ object KafkaEventPublisher{
     sb.append("\",\"event_type\":\"")
     sb.append(eventTypes(idx % eventTypes.length))
     sb.append("\",\"event_time\":\"")
-    var retTime = startTime
-    if (useCurrentTime) {
-      retTime = System.currentTimeMillis
-      sb.append(retTime)
-    } else {
-      val offset = rnd.nextInt(timeSlice)
-      sb.append(retTime + offset)
-    }
+    val retTime = System.currentTimeMillis
+    sb.append(retTime)
     sb.append("\",\"ip_address\":\"1.2.3.4\"}")
     (sb.toString(), retTime)
   }
@@ -96,11 +89,11 @@ object KafkaEventPublisher{
       System.err.println("Usage: KafkaEventPublisher <metadataBrokerList> <topic> <num_trials> <totalNumElems> <UseCurrentTime>")
       System.exit(1)
     }
-    
+
     val brokers = args(0)
     val topic = args(1)
     val num_trials = args(2).toInt
-    val num_elements = args(3).toInt
+    val elements_per_trial = args(3).toInt
     val use_current_time = args(4).toBoolean
 
     // Zookeeper connection properties
@@ -124,6 +117,13 @@ object KafkaEventPublisher{
     val adTypes = Array("banner", "modal", "sponsored-search", "mail", "mobile")
     val eventTypes = Array("view", "click", "purchase")
 
+    val campaignToAdIds = campaignIds.map { c =>
+      val out = (0 until ADS_PER_CAMPAIGN).map { a =>
+        java.util.UUID.randomUUID().toString
+      }
+      (c, out)
+    }.toMap
+
     val adIdToCampaignMap = campaignToAdIds.flatMap { c =>
       c._2.map { a =>
         (a, c._1)
@@ -133,16 +133,16 @@ object KafkaEventPublisher{
     val adIds = adIdToCampaignMap.keys.toArray
     val benchmarkIds = BenchmarkIds(userIds, pageIds, campaignIds, eventTypes, adTypes, adIds)
 
-    for (a <- 1 until numTrials){
-        var idx = 0     
-        while (numElemsGenerated < total_num_elems) {
-	    val stringBuilder = new java.lang.StringBuilder
-            val advertise_result = generateJson(benchmarkIds, ThreadLocalRandom.current, stringBuilder, idx, use_current_time)
-	    val message = new ProducerRecord[String, String](topic, null, advertise_result)
-	    producer.send(message)
-	    totalNumElems += 1
-	}
-	System.out.println("Sent " + total_num_elems + " events to Kafka")
-    }	
+    for (a <- 1 until num_trials) {
+      var elements_added = 0
+      while (elements_added < elements_per_trial) {
+        val stringBuilder = new java.lang.StringBuilder
+        val advertise_result = generateJson(benchmarkIds, ThreadLocalRandom.current, stringBuilder, elements_added, use_current_time)
+        val message = new ProducerRecord[String, String](topic, null, advertise_result._1)
+        producer.send(message)
+        elements_added += 1
+      }
+      System.out.println("Sent" + elements_per_trial + " events to Kafka")
+    }
   }
 }
