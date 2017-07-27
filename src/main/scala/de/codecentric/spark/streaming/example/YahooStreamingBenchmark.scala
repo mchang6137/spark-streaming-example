@@ -1,12 +1,11 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Copyright 2016 Matthias Niehoff
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,32 +15,29 @@
  */
 
 // scalastyle:off println
-package org.apache.spark.examples
+package de.codecentric.spark.streaming.example
 
 import java.io.File
 import java.io.PrintWriter
+import java.util
 import java.util.concurrent.Semaphore
 import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.HashMap
 
 import scala.collection.mutable.ArrayBuffer
-
-import net.minidev.json.JSONObject
-import net.minidev.json.parser.JSONParser
 
 import org.apache.spark.SparkConf
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
 import org.apache.spark.TaskContext
 import org.apache.spark.broadcast.Broadcast
-import org.apache.spark.internal.Logging
+//import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.streaming.{Duration, Milliseconds, Seconds, Time}
+import org.apache.spark.streaming.{ Duration, Milliseconds, Seconds, Time }
 
 import kafka.serializer.StringDecoder
 import org.apache.spark.streaming
-import org.apache.spark.streaming.{Milliseconds, StreamingContext}
+import org.apache.spark.streaming.{ Milliseconds, StreamingContext }
 
 import org.apache.spark.streaming.kafka.KafkaUtils
 import org.apache.spark.streaming.dstream
@@ -51,13 +47,12 @@ import org.sedis._
 import redis.clients.jedis._
 import scala.collection.Iterator
 import org.apache.spark.rdd.RDD
-import java.util.{UUID, LinkedHashMap}
+import java.util.{ UUID, LinkedHashMap }
 import compat.Platform.currentTime
-import benchmark.common.Utils
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
 
-object YahooStreamingBenchmark extends Logging {
+object YahooStreamingBenchmark {
 
   def getTimeDiff(cwc_iter: Iterator[((String, Long), Int)]): Iterator[(String, Long, Long)] = {
     if (cwc_iter.hasNext) {
@@ -79,7 +74,7 @@ object YahooStreamingBenchmark extends Logging {
 
   def main(args: Array[String]) {
 
-      if (args.length < 3) {
+    if (args.length < 3) {
       System.err.println(
         s"""
            |Usage: KafkaStreamingBillboard <brokers> <topics> <cassandraHost>
@@ -95,23 +90,23 @@ object YahooStreamingBenchmark extends Logging {
     val brokers = args(0)
     val topics = args(1)
     val redis_host = args(2)
-    val batch_size = args(3).longValue()
-    
+    val batch_size = args(3).toLong
+
     val time_divisor: Long = 10000L
 
     val sparkConf = new SparkConf().setAppName("YahooBenchmarkTbot")
     sparkConf.remove("spark.jars")
 
-    val sc = new StreamingContext(sparkConf, Milliseconds(batch_size))
+    val ssc = new StreamingContext(sparkConf, Milliseconds(batch_size))
 
     val start = System.nanoTime()
-    
+
     //Read from Kafka
     val topicsSet = topics.split(",").toSet
     val kafkaParams = Map[String, String]("metadata.broker.list" -> brokers)
-    val kafka_stream = KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](sc, kafkaParams, topicsSet)
+    val kafka_stream = KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](ssc, kafkaParams, topicsSet)
 
-    val kafkaRawData = messages.map(_.2)
+    val kafkaRawData = kafka_stream.map(_._2)
     //Parse the String as JSON
     val kafkaData = kafkaRawData.map(parseJson(_))
 
@@ -146,7 +141,7 @@ object YahooStreamingBenchmark extends Logging {
     ssc.awaitTermination
 
     val end = System.nanoTime()
-    println("Time for all results is " + (end-start)/1e9 + " secs")
+    println("Time for all results is " + (end - start) / 1e9 + " secs")
   }
 
   def joinHosts(hosts: Seq[String], port: String): String = {
@@ -170,13 +165,15 @@ object YahooStreamingBenchmark extends Logging {
       parser.getString("ad_type"),
       parser.getString("event_type"),
       parser.getString("event_time"),
-      parser.getString("ip_address"))
+      parser.getString("ip_address")
+    )
   }
 
   def eventProjection(event: Array[String]): Array[String] = {
     Array(
       event(2), //ad_id
-      event(5)) //event_time
+      event(5)
+    ) //event_time
   }
 
   def queryRedisTopLevel(eventsIterator: Iterator[Array[String]], redisHost: String): Iterator[Array[String]] = {
@@ -190,7 +187,7 @@ object YahooStreamingBenchmark extends Logging {
   def queryRedis(pool: Pool, ad_to_campaign: util.HashMap[String, String], event: Array[String]): Array[String] = {
     val ad_id = event(0)
     val campaign_id_cache = ad_to_campaign.get(ad_id)
-    if (campaign_id_cache==null) {
+    if (campaign_id_cache == null) {
       pool.withJedisClient { client =>
         val campaign_id_temp = Dress.up(client).get(ad_id)
         if (campaign_id_temp != None) {
@@ -209,7 +206,7 @@ object YahooStreamingBenchmark extends Logging {
 
   def campaignTime(event: Array[String]): ((String, Long), String) = {
     val time_divisor: Long = 10000L
-    ((event(0),time_divisor * (event(2).toLong / time_divisor)), event(1))
+    ((event(0), time_divisor * (event(2).toLong / time_divisor)), event(1))
     //Key: (campaign_id, window_time),  Value: ad_id
   }
 
@@ -221,7 +218,7 @@ object YahooStreamingBenchmark extends Logging {
     pool.underlying.getResource.close
   }
 
-  private def writeWindow(pool: Pool, campaign_window_counts: ((String, Long), Int)) : String = {
+  private def writeWindow(pool: Pool, campaign_window_counts: ((String, Long), Int)): String = {
     val campaign_window_pair = campaign_window_counts._1
     val campaign = campaign_window_pair._1
     val window_timestamp = campaign_window_pair._2.toString
@@ -247,4 +244,3 @@ object YahooStreamingBenchmark extends Logging {
 
   }
 }
-
