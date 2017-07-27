@@ -5,13 +5,20 @@ lazy val sparkStreamingExample = project
 
 name := "spark-streaming-example"
 
+crossPaths := false
+
 libraryDependencies ++= Vector(
   Library.scalaCheck % "test",
   Library.spark,
   Library.sparkKafka,
   Library.sparkStreaming,
-  Library.sparkCassandra
+  Library.sparkCassandra,
+  Library.json,
+  Library.redisClient,
+  Library.sedis
 )
+
+resolvers += "Sedis" at "http://pk11-scratch.googlecode.com/svn/trunk"
 
 initialCommands := """|import de.codecentric.spark.streaming.example._
                       |""".stripMargin
