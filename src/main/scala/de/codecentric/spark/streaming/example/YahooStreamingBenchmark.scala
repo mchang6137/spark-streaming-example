@@ -99,12 +99,16 @@ object YahooStreamingBenchmark {
 
     val ssc = new StreamingContext(sparkConf, Milliseconds(batch_size))
 
+    println("michael Spark streaming context started")
     val start = System.nanoTime()
 
     //Read from Kafka
     val topicsSet = topics.split(",").toSet
-    val kafkaParams = Map[String, String]("metadata.broker.list" -> brokers)
+    val kafkaParams = Map[String, String]("metadata.broker.list" -> brokers, , "auto.offset.reset" -> "smallest")
+    System.err.println("Trying to connect to Kafka at " + brokers)
     val kafka_stream = KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](ssc, kafkaParams, topicsSet)
+    System.err.println("michael!")
+    kafka_stream.print()
 
     val kafkaRawData = kafka_stream.map(_._2)
     //Parse the String as JSON
