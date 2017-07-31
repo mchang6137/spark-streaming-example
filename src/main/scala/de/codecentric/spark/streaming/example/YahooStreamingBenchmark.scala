@@ -104,7 +104,7 @@ object YahooStreamingBenchmark {
 
     //Read from Kafka
     val topicsSet = topics.split(",").toSet
-    val kafkaParams = Map[String, String]("metadata.broker.list" -> brokers, , "auto.offset.reset" -> "smallest")
+    val kafkaParams = Map[String, String]("metadata.broker.list" -> brokers, "auto.offset.reset" -> "smallest")
     System.err.println("Trying to connect to Kafka at " + brokers)
     val kafka_stream = KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](ssc, kafkaParams, topicsSet)
     System.err.println("michael!")
@@ -226,6 +226,7 @@ object YahooStreamingBenchmark {
     val campaign_window_pair = campaign_window_counts._1
     val campaign = campaign_window_pair._1
     val window_timestamp = campaign_window_pair._2.toString
+    val window_timestamp_int = campaign_window_pair._2.toInt
     val window_seenCount = campaign_window_counts._2
     pool.withJedisClient { client =>
 
@@ -241,6 +242,10 @@ object YahooStreamingBenchmark {
         }
         dressUp.lpush(windowListUUID, window_timestamp)
       }
+      //Take a moving average of the overall latency seen
+
+      val previous_latency = window_timestamp_int - currentTime.toInt
+      dressUp.hinrBy(windowUUID, "previous_latency", previous_latency.toString)
       dressUp.hincrBy(windowUUID, "seen_count", window_seenCount)
       dressUp.hset(windowUUID, "time_updated", currentTime.toString)
       return window_seenCount.toString
